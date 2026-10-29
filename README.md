@@ -1,4 +1,5 @@
 # sjtkey
+**Aplikasi online:** https://devmeasurement.shinyapps.io/sjtkey
 
 Penskoran, evaluasi kunci, dan visualisasi **Situational Judgement Test (SJT)** dengan R dasar.
 
