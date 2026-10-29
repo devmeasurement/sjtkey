@@ -1,33 +1,36 @@
 # sjtkey
-**Aplikasi online:** https://devmeasurement.shinyapps.io/sjtkey
 
-Penskoran, evaluasi kunci, dan visualisasi **Situational Judgement Test (SJT)** dengan R dasar.
+Scoring, key evaluation, and visualization for **Situational Judgement Tests (SJT)** in base R, with an interactive Shiny application.
 
-## Fitur
-- **Penyusunan kunci** dari rating pakar (`build_key`, metode mean atau rank)
-- **Empat metode skor**: `expert`, `best`, `consensus`, `standardized` (`score_sjt`)
-- **Reliabilitas**: Cronbach's alpha (`cronbach_alpha`)
-- **Analisis opsi**: proporsi pemilih, korelasi point-biserial, skor sisa (`option_analysis`)
-- **Pemeriksaan kunci** per butir dengan Spearman rho (`key_check`)
-- **Kesepakatan pakar**: Kendall's W (`expert_agreement`)
-- **Perbandingan metode** dan validitas kriteria (`compare_keys`)
-- **Grafik** otomatis ke layar dan PDF
-- **Skor NRM** opsional (butuh paket `mirt`)
+**Online app:** https://devmeasurement.shinyapps.io/sjtkey
 
-## Format data
-| File | Isi |
+## Features
+- **Key construction** from expert ratings (`build_key`, mean or rank method)
+- **Four scoring methods**: `expert`, `best`, `consensus`, `standardized` (`score_sjt`)
+- **Reliability**: Cronbach's alpha (`cronbach_alpha`)
+- **Option analysis**: option proportions, point-biserial correlations, rest scores (`option_analysis`)
+- **Key checking** per item using Spearman's rho (`key_check`)
+- **Expert agreement**: Kendall's W (`expert_agreement`)
+- **Method comparison** and criterion validity (`compare_keys`)
+- **Plots** displayed on screen and exported to PDF
+- Optional **NRM scoring** (requires the `mirt` package)
+
+## Data format
+| File | Content |
 |---|---|
-| `respons_sjt.csv` | Kolom `item1..itemK` berisi kode opsi terpilih (1..m); opsional `skor_kriteria` |
-| `kunci_pakar.csv` | Kolom pertama nama butir, kolom berikutnya bobot tiap opsi |
-| `rating_pakar_long.csv` | Kolom `pakar`, `item`, `opsi`, `rating` (opsional) |
+| `respons_sjt.csv` | Columns `item1..itemK` containing the chosen option code (1..m); optional `skor_kriteria` (external criterion) |
+| `kunci_pakar.csv` | First column: item name; remaining columns: key weight of each option |
+| `rating_pakar_long.csv` | Columns `pakar` (expert), `item`, `opsi` (option), `rating` (optional) |
 
-## Cara pakai
-Unduh `sjtkey.R`, buka di RStudio, letakkan file CSV di folder yang sama, lalu klik **Source**.
-Hasil tersimpan di folder `hasil_sjt/`.
+Example data in `data_contoh/` are **simulated** and must not be used for substantive conclusions.
 
-```r
-source("sjtkey.R")
-```
+## Usage
+- **Online:** open the app link above.
+- **Locally:** download `app.R` and the `data_contoh` folder, open `app.R` in RStudio, and click **Run App** (requires the `shiny` package).
+- **Script:** `source("sjtkey.R")` with the CSV files in the working directory.
+
+## Citation
+If you use this software, please cite the associated article (details to be added after publication).
 
 ## Status
-Versi awal.
+Version 0.1.
