@@ -1,16 +1,17 @@
 # =============================================================================
-# sjtkey: aplikasi Shiny untuk penskoran, evaluasi kunci, dan visualisasi SJT
-# Jalankan: buka file ini di RStudio lalu klik "Run App"
-# Paket yang dibutuhkan: shiny (selain itu hanya R dasar)
+# sjtkey: Shiny application for scoring, key evaluation, and visualization of
+# Situational Judgement Tests (SJT)
+# Usage: open this file in RStudio and click "Run App".
+# Required package: shiny (everything else is base R).
 # =============================================================================
 library(shiny)
 
-# ---- 1. Fungsi analisis -----------------------------------------------------
+# ---- 1. Analysis functions -----------------------------------------------------
 
 build_key <- function(ratings, method = c("mean", "rank")) {
   method <- match.arg(method)
   stopifnot(length(dim(ratings)) == 3)
-  m <- apply(ratings, c(2, 3), mean, na.rm = TRUE)          # butir x opsi
+  m <- apply(ratings, c(2, 3), mean, na.rm = TRUE)          # item x option
   if (method == "rank") m <- t(apply(m, 1, rank, ties.method = "average"))
   dimnames(m) <- list(paste0("item", seq_len(nrow(m))),
                       paste0("opt", seq_len(ncol(m))))
@@ -21,7 +22,7 @@ expert_agreement <- function(ratings) {
   stopifnot(length(dim(ratings)) == 3, dim(ratings)[1] >= 2)
   m <- dim(ratings)[1]; n <- dim(ratings)[3]
   vapply(seq_len(dim(ratings)[2]), function(j) {
-    R  <- t(apply(ratings[, j, ], 1, rank))                 # pakar x opsi
+    R  <- t(apply(ratings[, j, ], 1, rank))                 # expert x option
     Rj <- colSums(R)
     S  <- sum((Rj - mean(Rj))^2)
     12 * S / (m^2 * (n^3 - n))
@@ -86,7 +87,7 @@ key_check <- function(oa, rho_min = 0.5, prop_min = 0.05) {
       cor(d$weight[ok], d$mean_rest[ok], method = "spearman")) else NA_real_
     data.frame(item = d$item[1], rho = round(rho, 2),
                min_prop = round(min(d$prop), 2),
-               periksa = is.na(rho) || rho < rho_min || min(d$prop) < prop_min,
+               flag = is.na(rho) || rho < rho_min || min(d$prop) < prop_min,
                stringsAsFactors = FALSE)
   })
   out <- do.call(rbind, unname(res))
@@ -98,27 +99,27 @@ compare_keys <- function(resp, key, criterion = NULL,
                          methods = c("expert", "best", "consensus", "standardized")) {
   sc  <- lapply(methods, function(m) score_sjt(resp, key, m)); names(sc) <- methods
   tot <- sapply(sc, function(s) s$total)
-  out <- data.frame(metode = methods,
+  out <- data.frame(method = methods,
                     alpha  = round(unname(sapply(sc, function(s) cronbach_alpha(s$item_scores))), 3),
                     stringsAsFactors = FALSE)
   if (!is.null(criterion)) {
-    out$r_kriteria <- round(unname(vapply(methods, function(m)
+    out$r_criterion <- round(unname(vapply(methods, function(m)
       cor(tot[, m], criterion, use = "pairwise.complete.obs"), numeric(1))), 3)
   }
-  list(ringkasan = out,
-       korelasi_skor = round(cor(tot, use = "pairwise.complete.obs"), 3),
-       skor = tot)
+  list(summary = out,
+       score_cor = round(cor(tot, use = "pairwise.complete.obs"), 3),
+       scores = tot)
 }
 
 
-baca_csv <- function(f) {
+read_csv_flex <- function(f) {
   l1  <- readLines(f, n = 1, warn = FALSE)
   sep <- if (grepl(";", l1, fixed = TRUE) && !grepl(",", l1, fixed = TRUE)) ";" else ","
   read.csv(f, sep = sep, stringsAsFactors = FALSE, check.names = FALSE,
            fileEncoding = "UTF-8-BOM")
 }
 
-# Data simulasi cadangan
+# Fallback simulated data
 sim_sjt <- function(n = 300, k = 12, seed = 1) {
   set.seed(seed)
   theta <- rnorm(n)
@@ -134,20 +135,20 @@ sim_sjt <- function(n = 300, k = 12, seed = 1) {
     }
   }
   resp <- as.data.frame(resp)
-  resp$skor_kriteria <- round(55 + 12 * (0.55 * theta + sqrt(1 - 0.55^2) * rnorm(n)))
+  resp$criterion_score <- round(55 + 12 * (0.55 * theta + sqrt(1 - 0.55^2) * rnorm(n)))
   list(resp = resp, key = key)
 }
 
-# ---- 6. Fungsi visualisasi (R dasar) ----------------------------------------
-pal_rank <- c("#2c7bb6", "#66c2a5", "#fdae61", "#d7191c")  # urutan 1 (terbaik) ... 4
+# ---- 6. Plot functions (base R) ----------------------------------------
+pal_rank <- c("#2c7bb6", "#66c2a5", "#fdae61", "#d7191c")  # rank 1 (best) ... 4
 
-plot_metode <- function(rs) {
+plot_methods <- function(rs) {
   M <- rbind("Alpha" = rs$alpha)
-  if ("r_kriteria" %in% names(rs)) M <- rbind(M, "Korelasi kriteria" = rs$r_kriteria)
-  colnames(M) <- rs$metode
+  if ("r_criterion" %in% names(rs)) M <- rbind(M, "Criterion correlation" = rs$r_criterion)
+  colnames(M) <- rs$method
   barplot(M, beside = TRUE, col = c("#2c7bb6", "#fdae61")[seq_len(nrow(M))],
           ylim = c(min(0, M, na.rm = TRUE), max(1, M, na.rm = TRUE)),
-          ylab = "Nilai", main = "Perbandingan metode skor",
+          ylab = "Value", main = "Comparison of scoring methods",
           legend.text = rownames(M), args.legend = list(x = "bottomright", bty = "n"))
   abline(h = 0)
 }
@@ -158,7 +159,7 @@ plot_cor_heat <- function(cm) {
   image(1:k, 1:k, t(cm[k:1, , drop = FALSE]),
         col = colorRampPalette(c("#d7191c", "white", "#2c7bb6"))(100),
         zlim = c(-1, 1), axes = FALSE, xlab = "", ylab = "",
-        main = "Korelasi antar metode skor")
+        main = "Correlation among scoring methods")
   axis(1, at = 1:k, labels = colnames(cm), las = 2)
   axis(2, at = 1:k, labels = rev(rownames(cm)), las = 2)
   for (i in 1:k) for (j in 1:k) text(j, k - i + 1, sprintf("%.2f", cm[i, j]))
@@ -167,44 +168,44 @@ plot_cor_heat <- function(cm) {
 
 plot_total <- function(total) {
   hist(total, breaks = 20, col = "#abd9e9", border = "white", freq = FALSE,
-       main = "Distribusi skor total (bobot pakar)", xlab = "Skor total")
+       main = "Distribution of total scores (expert weights)", xlab = "Total score")
   lines(density(total), lwd = 2, col = "#2c7bb6")
 }
 
-plot_kriteria <- function(total, kriteria) {
-  r <- cor(total, kriteria, use = "pairwise.complete.obs")
-  plot(total, kriteria, pch = 19, col = "#2c7bb680",
-       xlab = "Skor SJT (bobot pakar)", ylab = "Skor kriteria eksternal",
-       main = paste0("Validitas kriteria (r = ", sprintf("%.2f", r), ")"))
-  abline(lm(kriteria ~ total), col = "#d7191c", lwd = 2)
+plot_criterion <- function(total, criterion) {
+  r <- cor(total, criterion, use = "pairwise.complete.obs")
+  plot(total, criterion, pch = 19, col = "#2c7bb680",
+       xlab = "SJT score (expert weights)", ylab = "External criterion score",
+       main = paste0("Criterion validity (r = ", sprintf("%.2f", r), ")"))
+  abline(lm(criterion ~ total), col = "#d7191c", lwd = 2)
 }
 
 plot_option_props <- function(oa) {
   its <- unique(oa$item)
   M <- sapply(its, function(it) {
     d <- oa[oa$item == it, ]
-    d[order(-d$weight), "prop"]            # proporsi: opsi terbaik -> terburuk
+    d[order(-d$weight), "prop"]            # proportions: best -> worst option
   })
   colnames(M) <- its
   op <- par(mar = c(5, 4, 3, 9), xpd = TRUE); on.exit(par(op))
   barplot(M, col = pal_rank[seq_len(nrow(M))], las = 2, ylim = c(0, 1),
-          ylab = "Proporsi pemilih", main = "Pilihan responden per butir",
+          ylab = "Proportion of respondents", main = "Option choices per item",
           border = "white")
   legend("topright", inset = c(-0.2, 0), bty = "n", cex = 0.8,
-         legend = c("Opsi terbaik (pakar)", "Opsi ke-2", "Opsi ke-3", "Opsi terburuk")[seq_len(nrow(M))],
+         legend = c("Best option (experts)", "2nd option", "3rd option", "Worst option")[seq_len(nrow(M))],
          fill = pal_rank[seq_len(nrow(M))])
 }
 
 plot_key_check <- function(kc, rho_min = 0.5) {
   op <- par(mar = c(6, 4, 3, 1)); on.exit(par(op))
-  cols <- ifelse(kc$periksa, "#d7191c", "#2c7bb6")
+  cols <- ifelse(kc$flag, "#d7191c", "#2c7bb6")
   plot(seq_len(nrow(kc)), kc$rho, ylim = c(-1, 1), pch = 19, cex = 1.3, col = cols,
-       xaxt = "n", xlab = "", ylab = "Spearman rho (bobot pakar vs skor sisa)",
-       main = "Pemeriksaan kunci per butir")
+       xaxt = "n", xlab = "", ylab = "Spearman rho (expert weight vs rest score)",
+       main = "Key check per item")
   axis(1, at = seq_len(nrow(kc)), labels = kc$item, las = 2, cex.axis = 0.8)
   abline(h = rho_min, lty = 2); abline(h = 0, col = "grey70")
   legend("bottomright", bty = "n", pch = 19, col = c("#2c7bb6", "#d7191c"),
-         legend = c("Wajar", "Perlu diperiksa"))
+         legend = c("Acceptable", "Needs review"))
 }
 
 plot_option_curves <- function(resp, key, items_plot, n_grup = 4) {
@@ -225,26 +226,34 @@ plot_option_curves <- function(resp, key, items_plot, n_grup = 4) {
     cols <- pal_rank[rank(-key[j, ], ties.method = "first")]
     matplot(seq_len(ng), P, type = "b", lty = 1, pch = 16, col = cols,
             ylim = c(0, 1), xaxt = "n",
-            xlab = "Kelompok skor sisa (rendah -> tinggi)",
-            ylab = "Proporsi memilih", main = it)
+            xlab = "Rest-score group (low -> high)",
+            ylab = "Proportion choosing", main = it)
     axis(1, at = seq_len(ng))
     legend("top", bty = "n", cex = 0.6, ncol = 2, lty = 1, pch = 16, col = cols,
-           legend = paste0("opsi", seq_len(ncol(key)), " (b=", key[j, ], ")"))
+           legend = paste0("option", seq_len(ncol(key)), " (b=", key[j, ], ")"))
   }
 }
 
-plot_w_pakar <- function(w, its) {
+plot_w_expert <- function(w, its) {
   op <- par(mar = c(6, 4, 3, 1)); on.exit(par(op))
   barplot(w, names.arg = its, las = 2, ylim = c(0, 1), col = "#66c2a5", border = "white",
-          ylab = "Kendall's W", main = "Kesepakatan pakar per butir")
+          ylab = "Kendall's W", main = "Expert agreement per item")
   abline(h = 0.5, lty = 2)
 }
 
 
-# ---- Pemuat data untuk aplikasi --------------------------------------------
-siapkan_data <- function(f_resp, f_key, f_rate = NULL) {
-  resp <- baca_csv(f_resp)
-  kk   <- baca_csv(f_key)
+# ---- 7. Data loading for the app -------------------------------------------
+# Column names are English; the former Indonesian names are still accepted.
+rename_cols <- function(df) {
+  map <- c(pakar = "expert", opsi = "option", skor_kriteria = "criterion_score")
+  hit <- names(df) %in% names(map)
+  names(df)[hit] <- map[names(df)[hit]]
+  df
+}
+
+prepare_data <- function(f_resp, f_key, f_rate = NULL) {
+  resp <- rename_cols(read_csv_flex(f_resp))
+  kk   <- read_csv_flex(f_key)
   key  <- as.matrix(kk[, -1, drop = FALSE])
   rownames(key) <- as.character(kk[[1]])
   storage.mode(key) <- "numeric"
@@ -252,153 +261,160 @@ siapkan_data <- function(f_resp, f_key, f_rate = NULL) {
   if (length(items) == 0)
     items <- grep("^item[0-9]+$", names(resp), ignore.case = TRUE, value = TRUE)
   if (length(items) == 0)
-    stop("Kolom butir tidak ditemukan. Nama kolom respons: ",
+    stop("No item columns found. Response file columns: ",
          paste(names(resp), collapse = ", "))
   key <- key[items, , drop = FALSE]
   resp[items] <- lapply(resp[items], as.integer)
   if (!all(unlist(resp[items]) %in% c(seq_len(ncol(key)), NA)))
-    stop("Ada kode respons di luar 1..", ncol(key), ". Periksa respons_sjt.csv.")
-  ratings <- NULL; w_pakar <- NULL
+    stop("Response codes outside 1..", ncol(key), ". Please check the response file.")
+  ratings <- NULL; w_expert <- NULL
   if (!is.null(f_rate)) {
-    rt <- baca_csv(f_rate)
-    n_pakar <- length(unique(rt$pakar)); n_item <- length(unique(rt$item))
-    n_opsi  <- length(unique(rt$opsi))
-    ratings <- aperm(array(rt$rating, dim = c(n_opsi, n_item, n_pakar)), c(3, 2, 1))
-    w_pakar <- expert_agreement(ratings)
+    rt <- rename_cols(read_csv_flex(f_rate))
+    need <- c("expert", "item", "option", "rating")
+    if (!all(need %in% names(rt)))
+      stop("The ratings file needs the columns: ", paste(need, collapse = ", "))
+    n_expert <- length(unique(rt$expert)); n_item <- length(unique(rt$item))
+    n_option <- length(unique(rt$option))
+    # Rows are ordered expert (outermost) > item > option (innermost)
+    ratings  <- aperm(array(rt$rating, dim = c(n_option, n_item, n_expert)), c(3, 2, 1))
+    w_expert <- expert_agreement(ratings)
   }
-  list(resp = resp, key = key, items = items, ratings = ratings, w_pakar = w_pakar,
-       kriteria = if ("skor_kriteria" %in% names(resp)) resp$skor_kriteria else NULL)
+  list(resp = resp, key = key, items = items, ratings = ratings, w_expert = w_expert,
+       criterion = if ("criterion_score" %in% names(resp)) resp$criterion_score else NULL)
 }
 
-ada_contoh <- all(file.exists(file.path("data_contoh",
-  c("respons_sjt.csv", "kunci_pakar.csv"))))
+example_ok <- all(file.exists(file.path("example_data",
+  c("responses.csv", "key.csv"))))
 
-# ---- Antarmuka --------------------------------------------------------------
+# ---- 8. User interface ------------------------------------------------------
 ui <- fluidPage(
-  titlePanel("sjtkey: Penskoran dan Evaluasi Kunci SJT"),
+  titlePanel("sjtkey: Scoring and Key Evaluation for Situational Judgement Tests"),
   sidebarLayout(
     sidebarPanel(
       width = 3,
-      radioButtons("sumber", "Sumber data",
-        choices = c(if (ada_contoh) c("Data contoh (simulasi)" = "contoh"),
-                    "Simulasi cadangan dari R" = "sim",
-                    "Unggah CSV saya" = "unggah"),
-        selected = if (ada_contoh) "contoh" else "sim"),
-      conditionalPanel("input.sumber == 'unggah'",
-        fileInput("f_resp", "respons_sjt.csv", accept = ".csv"),
-        fileInput("f_key",  "kunci_pakar.csv", accept = ".csv"),
-        fileInput("f_rate", "rating_pakar_long.csv (opsional)", accept = ".csv")),
+      radioButtons("source", "Data source",
+        choices = c(if (example_ok) c("Example data (simulated)" = "example"),
+                    "Built-in simulation" = "sim",
+                    "Upload my CSV files" = "upload"),
+        selected = if (example_ok) "example" else "sim"),
+      conditionalPanel("input.source == 'upload'",
+        fileInput("f_resp", "Responses (CSV)", accept = ".csv"),
+        fileInput("f_key",  "Expert key (CSV)", accept = ".csv"),
+        fileInput("f_rate", "Expert ratings, long format (CSV, optional)", accept = ".csv"),
+        helpText("Responses: columns item1..itemK with the chosen option (1..m); ",
+                 "optional criterion_score. Key: first column = item name, then one ",
+                 "column per option. Ratings: columns expert, item, option, rating.")),
       hr(),
-      sliderInput("rho_min", "Ambang Spearman rho (pemeriksaan kunci)",
+      sliderInput("rho_min", "Spearman rho threshold (key check)",
                   min = 0, max = 1, value = 0.9, step = 0.05),
-      sliderInput("prop_min", "Ambang proporsi pemilih minimum",
+      sliderInput("prop_min", "Minimum option proportion",
                   min = 0, max = 0.2, value = 0.05, step = 0.01),
       hr(),
-      downloadButton("dl_ringkasan", "Unduh ringkasan metode"),
+      downloadButton("dl_summary", "Download method summary"),
       br(), br(),
-      downloadButton("dl_opsi", "Unduh analisis opsi"),
+      downloadButton("dl_options", "Download option analysis"),
       br(), br(),
-      downloadButton("dl_kunci", "Unduh pemeriksaan kunci"),
+      downloadButton("dl_key", "Download key check"),
       br(), br(),
-      downloadButton("dl_skor", "Unduh skor responden")
+      downloadButton("dl_scores", "Download respondent scores")
     ),
     mainPanel(
       width = 9,
       verbatimTextOutput("info"),
       tabsetPanel(
-        tabPanel("Metode skor",
-          tableOutput("tb_ringkasan"),
-          plotOutput("g_metode", height = 320),
+        tabPanel("Scoring methods",
+          tableOutput("tb_summary"),
+          plotOutput("g_methods", height = 320),
           plotOutput("g_cor", height = 380),
           plotOutput("g_total", height = 320),
-          plotOutput("g_kriteria", height = 340)),
-        tabPanel("Analisis opsi",
+          plotOutput("g_criterion", height = 340)),
+        tabPanel("Option analysis",
           plotOutput("g_props", height = 380),
-          tableOutput("tb_opsi")),
-        tabPanel("Pemeriksaan kunci",
+          tableOutput("tb_options")),
+        tabPanel("Key check",
           plotOutput("g_kc", height = 340),
           tableOutput("tb_kc"),
-          h4("Kurva opsi butir yang perlu diperiksa"),
+          h4("Option curves for flagged items"),
           plotOutput("g_curves", height = 520)),
-        tabPanel("Kesepakatan pakar",
-          uiOutput("ket_pakar"),
+        tabPanel("Expert agreement",
+          uiOutput("note_expert"),
           plotOutput("g_w", height = 340))
       )
     )
   )
 )
 
-# ---- Server -----------------------------------------------------------------
+# ---- 9. Server --------------------------------------------------------------
 server <- function(input, output, session) {
 
   d <- reactive({
-    if (input$sumber == "contoh") {
-      f_rate <- file.path("data_contoh", "rating_pakar_long.csv")
-      siapkan_data(file.path("data_contoh", "respons_sjt.csv"),
-                   file.path("data_contoh", "kunci_pakar.csv"),
+    if (input$source == "example") {
+      f_rate <- file.path("example_data", "expert_ratings.csv")
+      prepare_data(file.path("example_data", "responses.csv"),
+                   file.path("example_data", "key.csv"),
                    if (file.exists(f_rate)) f_rate else NULL)
-    } else if (input$sumber == "sim") {
+    } else if (input$source == "sim") {
       s <- sim_sjt()
       list(resp = s$resp, key = s$key, items = rownames(s$key), ratings = NULL,
-           w_pakar = NULL, kriteria = s$resp$skor_kriteria)
+           w_expert = NULL, criterion = s$resp$criterion_score)
     } else {
-      validate(need(input$f_resp, "Unggah respons_sjt.csv dan kunci_pakar.csv."),
-               need(input$f_key,  "Unggah kunci_pakar.csv."))
-      siapkan_data(input$f_resp$datapath, input$f_key$datapath,
+      validate(need(input$f_resp, "Please upload the responses file."),
+               need(input$f_key,  "Please upload the expert key file."))
+      prepare_data(input$f_resp$datapath, input$f_key$datapath,
                    if (!is.null(input$f_rate)) input$f_rate$datapath else NULL)
     }
   })
 
-  hasil <- reactive({ x <- d(); compare_keys(x$resp[, x$items], x$key, x$kriteria) })
-  oa    <- reactive({ x <- d(); option_analysis(x$resp[, x$items], x$key) })
-  kc    <- reactive(key_check(oa(), rho_min = input$rho_min, prop_min = input$prop_min))
+  result <- reactive({ x <- d(); compare_keys(x$resp[, x$items], x$key, x$criterion) })
+  oa     <- reactive({ x <- d(); option_analysis(x$resp[, x$items], x$key) })
+  kc     <- reactive(key_check(oa(), rho_min = input$rho_min, prop_min = input$prop_min))
 
   output$info <- renderText({
     x <- d()
-    paste0("Responden: ", nrow(x$resp), " | Butir: ", length(x$items),
-           " | Opsi: ", ncol(x$key),
-           " | Butir perlu diperiksa: ", sum(kc()$periksa))
+    paste0("Respondents: ", nrow(x$resp), " | Items: ", length(x$items),
+           " | Options: ", ncol(x$key),
+           " | Items flagged for review: ", sum(kc()$flag))
   })
 
-  output$tb_ringkasan <- renderTable(hasil()$ringkasan, digits = 3)
-  output$g_metode  <- renderPlot(plot_metode(hasil()$ringkasan))
-  output$g_cor     <- renderPlot(plot_cor_heat(hasil()$korelasi_skor))
-  output$g_total   <- renderPlot(plot_total(hasil()$skor[, "expert"]))
-  output$g_kriteria <- renderPlot({
-    validate(need(!is.null(d()$kriteria), "Kolom skor_kriteria tidak ada di data."))
-    plot_kriteria(hasil()$skor[, "expert"], d()$kriteria)
+  output$tb_summary <- renderTable(result()$summary, digits = 3)
+  output$g_methods  <- renderPlot(plot_methods(result()$summary))
+  output$g_cor      <- renderPlot(plot_cor_heat(result()$score_cor))
+  output$g_total    <- renderPlot(plot_total(result()$scores[, "expert"]))
+  output$g_criterion <- renderPlot({
+    validate(need(!is.null(d()$criterion), "No criterion_score column in the data."))
+    plot_criterion(result()$scores[, "expert"], d()$criterion)
   })
 
-  output$g_props <- renderPlot(plot_option_props(oa()))
-  output$tb_opsi <- renderTable(transform(oa(), prop = round(prop, 3),
+  output$g_props   <- renderPlot(plot_option_props(oa()))
+  output$tb_options <- renderTable(transform(oa(), prop = round(prop, 3),
     mean_rest = round(mean_rest, 2), r_pb = round(r_pb, 3)))
 
   output$g_kc  <- renderPlot(plot_key_check(kc(), rho_min = input$rho_min))
   output$tb_kc <- renderTable(kc())
   output$g_curves <- renderPlot({
     x <- d()
-    ip <- head(kc()$item[kc()$periksa], 6)
+    ip <- head(kc()$item[kc()$flag], 6)
     if (length(ip) == 0) ip <- head(x$items, 6)
     plot_option_curves(x$resp[, x$items], x$key, ip)
   })
 
-  output$ket_pakar <- renderUI({
-    if (is.null(d()$w_pakar))
-      p("Kesepakatan pakar butuh file rating_pakar_long.csv (kolom pakar, item, opsi, rating).")
+  output$note_expert <- renderUI({
+    if (is.null(d()$w_expert))
+      p("Expert agreement needs a ratings file (columns expert, item, option, rating).")
   })
   output$g_w <- renderPlot({
-    validate(need(!is.null(d()$w_pakar), "Data rating pakar belum tersedia."))
-    plot_w_pakar(d()$w_pakar, d()$items)
+    validate(need(!is.null(d()$w_expert), "Expert ratings are not available."))
+    plot_w_expert(d()$w_expert, d()$items)
   })
 
-  unduh <- function(nama, isi)
-    downloadHandler(filename = function() nama,
-                    content  = function(file) write.csv(isi(), file, row.names = FALSE))
-  output$dl_ringkasan <- unduh("ringkasan_metode.csv", function() hasil()$ringkasan)
-  output$dl_opsi      <- unduh("analisis_opsi.csv", oa)
-  output$dl_kunci     <- unduh("pemeriksaan_kunci.csv", kc)
-  output$dl_skor      <- unduh("skor_responden.csv", function()
-    data.frame(responden = seq_len(nrow(hasil()$skor)), hasil()$skor))
+  download_csv <- function(name, content)
+    downloadHandler(filename = function() name,
+                    content  = function(file) write.csv(content(), file, row.names = FALSE))
+  output$dl_summary <- download_csv("method_summary.csv", function() result()$summary)
+  output$dl_options <- download_csv("option_analysis.csv", oa)
+  output$dl_key     <- download_csv("key_check.csv", kc)
+  output$dl_scores  <- download_csv("respondent_scores.csv", function()
+    data.frame(respondent = seq_len(nrow(result()$scores)), result()$scores))
 }
 
 shinyApp(ui, server)
