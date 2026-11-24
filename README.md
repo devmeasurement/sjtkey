@@ -3,7 +3,6 @@
 Scoring, key evaluation, and visualization for **Situational Judgement Tests (SJTs)**,
 available as an interactive Shiny application and as base R code.
 
-**Online app:** https://devmeasurement.shinyapps.io/sjtkey
 
 ## What it does
 
