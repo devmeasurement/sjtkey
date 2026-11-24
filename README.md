@@ -62,7 +62,7 @@ test purpose, and substantive theory.
 
 If you use this software, please cite it (details will be added after publication):
 
-> [Yuni Susilowati]. (2026). *sjtkey: Scoring and key evaluation for situational judgement tests* (Version 0.1.0) [Computer software]. https://doi.org/10.5281/zenodo.[XXXXXXX]
+> [link removed for anonymous review]. (2026). *sjtkey: Scoring and key evaluation for situational judgement tests* (Version 0.1.0) [Computer software]. https://doi.org/10.5281/zenodo.[XXXXXXX]
 
 ## License
 
